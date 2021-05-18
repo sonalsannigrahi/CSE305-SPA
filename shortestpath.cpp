@@ -99,20 +99,20 @@ int main()
     return 0;
 }
 
-typedef std::vector<int> Queue;
-
-Queue TwoQueueInit(Queue Q){}
-Queue TwoQueueInsert(Queue Q, Vertex j){}
-Queue TwoQueueRemove(Queue Q, Vertex j){}
-Path TwoQueue(Graph G){
-    Queue Q;
-    TwoQueueInit(Q);
-    for (int i=0;i<sizeof(Graph);i++){
-        G.s
-        while (Q!=NULL){
-            TwoQueueRemove(Q)
-
-        }
-    }
-
-}
+//typedef std::vector<int> Queue;
+//
+//Queue TwoQueueInit(Queue Q){}
+//Queue TwoQueueInsert(Queue Q, Vertex j){}
+//Queue TwoQueueRemove(Queue Q, Vertex j){}
+//Path TwoQueue(Graph G){
+//    Queue Q;
+//    TwoQueueInit(Q);
+//    for (int i=0;i<sizeof(Graph);i++){
+//        G.s;
+//        while (Q!=NULL){
+//            TwoQueueRemove(Q);
+//
+//        }
+//    }
+//
+//}
