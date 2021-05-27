@@ -13,7 +13,10 @@
 
 #include <limits.h>
 #include <stdio.h>
-  
+#include <queue>
+#include <cstdlib>
+#include <algorithm>
+#include <vector>
 // Number of vertices in the graph
 #define V 9
   
@@ -99,6 +102,30 @@ int main()
     return 0;
 }
 
+/*
+two queues, Qi(tentative node distances) and Q*i (IO steps)
+Step 1: finds global minimum of Q*
+*/
+
+int globalmin(std::vector<int> Q){//<O(log n) time..?
+    int min=ULONG_MAX;
+    if (Q.size()==1){
+        return Q.front();
+    }
+    size_t len=Q.size()/2;
+    return std::min(globalmin(std::vector<int>(Q.begin(),Q.end()-len)),globalmin(std::vector<int>(Q.begin()+len,Q.end())));
+}
+std::vector<int> deletemin(std::vector<int> Q, int L){
+    std::vector<int> R;
+    if (Q.back()>L){
+        R.push_back(Q.back());
+        Q.pop_back();
+    }
+    return Q;
+}
+void dijkpar(int graph[V][V],int src){
+
+}
 //typedef std::vector<int> Queue;
 //
 //Queue TwoQueueInit(Queue Q){}

@@ -8,6 +8,9 @@ Useful links for the data:
 http://snap.stanford.edu/data/index.html
 http://www.crawdad.org
 https://gis.stackexchange.com/questions/104452/building-a-graph-from-osm
+
+delta-stepping
+https://old.insight-centre.org/sites/default/files/publications/engineering_a_parallel_-stepping_algorithm.pdf
 */
 #ifndef shortestpath_hpp
 #define shortestpath_hpp
