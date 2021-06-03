@@ -1,22 +1,25 @@
 //
 //  shortestpath.cpp
-//  
+//
 //
 //  Created by Sonal Sannigrahi on 01/05/2021.
 //
 
 #include "shortestpath.hpp"
-
-//First implementing Djikstra in parallel
-
-//sequential djikstra for comparison
-
+#include <stdio.h>
+#include <stdlib.h>
+#include <thread>
+#include <stack>
+#include <iostream>
+#include <sys/time.h>
+#include <set>
 #include <limits.h>
 #include <stdio.h>
-#include <queue>
-#include <cstdlib>
-#include <algorithm>
-#include <vector>
+#define MAX 214
+#define INF -1
+//First implementing Djikstra in parallel
+
+//Sequential djikstra for comparison
 // Number of vertices in the graph
 #define V 9
   
@@ -84,62 +87,198 @@ void dijkstra(int graph[V][V], int src)
 }
   
 // driver program to test above function
-int main()
-{
-    /* Let us create the example graph discussed above */
-    int graph[V][V] = { { 0, 4, 0, 0, 0, 0, 0, 8, 0 },
-                        { 4, 0, 8, 0, 0, 0, 0, 11, 0 },
-                        { 0, 8, 0, 7, 0, 4, 0, 0, 2 },
-                        { 0, 0, 7, 0, 9, 14, 0, 0, 0 },
-                        { 0, 0, 0, 9, 0, 10, 0, 0, 0 },
-                        { 0, 0, 4, 14, 10, 0, 2, 0, 0 },
-                        { 0, 0, 0, 0, 0, 2, 0, 1, 6 },
-                        { 8, 11, 0, 0, 0, 0, 1, 0, 7 },
-                        { 0, 0, 2, 0, 0, 0, 6, 7, 0 } };
-  
-    dijkstra(graph, 0);
-  
-    return 0;
-}
+
 
 /*
-two queues, Qi(tentative node distances) and Q*i (IO steps)
-Step 1: finds global minimum of Q*
-*/
+namespace std
+{
+    template<class _container,
+        class _Ty> inline
+        bool contains(_container _C, const _Ty& _Val)
+        {return std::find(_C.begin(), _C.end(), _Val) != _C.end(); }
+};
 
-int globalmin(std::vector<int> Q){//<O(log n) time..?
-    int min=ULONG_MAX;
-    if (Q.size()==1){
-        return Q.front();
-    }
-    size_t len=Q.size()/2;
-    return std::min(globalmin(std::vector<int>(Q.begin(),Q.end()-len)),globalmin(std::vector<int>(Q.begin()+len,Q.end())));
-}
-std::vector<int> deletemin(std::vector<int> Q, int L){
-    std::vector<int> R;
-    if (Q.back()>L){
-        R.push_back(Q.back());
-        Q.pop_back();
-    }
-    return Q;
-}
-void dijkpar(int graph[V][V],int src){
+void vertices(int graph[V][V], std::vector<int>)
 
+
+void djikstra_parallel(size_t num_processors,int graph[V][V], int src, int tgt){
+    std::vector<int> cluster;
+    cluster.push_back(src);
+    
+    while(!std::contains(cluster, tgt)){
+        
+    }
+    
+    
+}*/
+
+/*
+
+ int main() <---Potential Graph Structure
+ {
+     // Let us create the example graph discussed above
+     int graph[V][V] = { { 0, 4, 0, 0, 0, 0, 0, 8, 0 },
+                         { 4, 0, 8, 0, 0, 0, 0, 11, 0 },
+                         { 0, 8, 0, 7, 0, 4, 0, 0, 2 },
+                         { 0, 0, 7, 0, 9, 14, 0, 0, 0 },
+                         { 0, 0, 0, 9, 0, 10, 0, 0, 0 },
+                         { 0, 0, 4, 14, 10, 0, 2, 0, 0 },
+                         { 0, 0, 0, 0, 0, 2, 0, 1, 6 },
+                         { 8, 11, 0, 0, 0, 0, 1, 0, 7 },
+                         { 0, 0, 2, 0, 0, 0, 6, 7, 0 } };
+   
+     dijkstra(graph, 0);
+   
+     return 0;
+ } */
+
+// delta-stepping method
+static int thread_num;
+int vertex_num, edge_num, min, c;
+int **adjacency_matrix;
+//bool *visit;//true means visiting done, otherwise false
+
+std::vector<std::pair <int,int>> N_l;
+std::vector<std::pair <int,int>> N_h;
+std::set<int> buckets[MAX+1];
+
+void relax(int u, int v, int w, int delta, std::vector<int> distance){
+    if(distance[v] + w < distance[u]){
+        int i = distance[u]/delta;
+        int j = (distance[v] + w)/delta;
+        buckets[i].erase(u);
+        buckets[j].insert(u);
+        distance[u] = distance[v] + w;
+        return;;
+    }
+    return;;
 }
-//typedef std::vector<int> Queue;
-//
-//Queue TwoQueueInit(Queue Q){}
-//Queue TwoQueueInsert(Queue Q, Vertex j){}
-//Queue TwoQueueRemove(Queue Q, Vertex j){}
-//Path TwoQueue(Graph G){
-//    Queue Q;
-//    TwoQueueInit(Q);
-//    for (int i=0;i<sizeof(Graph);i++){
-//        G.s;
-//        while (Q!=NULL){
-//            TwoQueueRemove(Q);
-//
-//        }
-//    }
-//
-//}
+
+void GenRequests(std::set<std::vector<int>>* R, std::set<int> N, int v){
+    for (auto u : N){
+        std::vector<int> elem;
+        elem.push_back(u);
+        elem.push_back(v);
+        elem.push_back(adjacency_matrix[u][v]);
+        R->insert(elem);
+    }
+}
+
+int main(int argc, char *argv[]){
+    //check type of argument
+    if (argc != 5) {
+        fprintf(stderr, "Insuficcient arguments\n");
+        fprintf(stderr, "Usage: ./%s thread input_file output_file source_id \n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+    //load argument
+    thread_num = atoi(argv[1]);
+    const char *INPUT_NAME = argv[2];
+    const char *OUTPUT_NAME = argv[3];
+    const int source = atoi(argv[4]) - 1;
+    const int delta = 2; //to be made into an argv input (was giving errors before!)
+    //load vertex&edge information
+    FILE *fh_in, *fh_out;
+    fh_in = fopen(INPUT_NAME,"r");
+    if(fh_in == NULL){
+        printf("Input file open failed.\n");
+    }
+    fscanf(fh_in,"%d %d",&vertex_num,&edge_num);
+    if(vertex_num - 1 > edge_num){
+        fprintf(stderr, "Input graph is not a connected graph\n");
+        fprintf(stderr, "Error on type of input graph\n");
+        exit(EXIT_FAILURE);
+    }
+
+    //dynamic allocate memory to adjacency_matrix
+    adjacency_matrix = new int*[vertex_num];
+    for(int i = 0; i < vertex_num; i++) adjacency_matrix[i] = new int[vertex_num];
+
+    //initialize matrix
+    for(int i = 0; i < vertex_num; i++)
+        for(int j = 0; j < vertex_num; j++)
+            adjacency_matrix[i][j] = INF;
+            
+    //load weight
+    int a, b, weight;//a and b is vertex_id1 and vertex_id2 respectively
+    for(int i = 0; i < edge_num; i++){
+        fscanf(fh_in, "%d %d %d", &a, &b, &weight);
+        adjacency_matrix[a - 1][b - 1] = weight;
+        adjacency_matrix[b - 1][a - 1] = weight;
+    }
+    
+    for(int i=0; i<vertex_num; i++){
+        for(int j=0; j<vertex_num; j++){
+            int edge =adjacency_matrix[i][j];
+            if(edge != INF){
+                if(edge<= delta){
+                    N_l.push_back(std::make_pair(i,j));
+
+                }
+                else{
+                    N_h.push_back(std::make_pair(i,j));
+                }
+            }
+        }
+    }
+    std::vector<std::set<int> >L(vertex_num);
+    std::vector<std::set<int>> H(vertex_num);
+    
+    for(auto iter: N_l){
+        L[iter.first].insert(iter.second);
+    }
+    
+    for(auto iter: N_h){
+        H[iter.first].insert(iter.second);
+    }
+    fclose(fh_in);
+    std::cout<<"Adjacency matrix and neighbours created"<<std::endl;
+    std::vector<int> distance(vertex_num);
+    for(int v=0; v< vertex_num; v++){
+        distance[v] = MAX;
+        buckets[MAX].insert(v);
+    }
+    
+    distance[source] = 0;
+    buckets[MAX].erase(source);
+    buckets[0].insert(source);
+
+    int k = 0;
+    while(k < MAX){
+        std::set<std::vector<int>> R_h;
+        std::set<std::vector<int>> R_l;
+        std::cout<<"Requests created"<<std::endl;
+        while(!buckets[k].empty()){
+            for (auto v : buckets[k]){ //do in parallel
+                buckets[k].erase(v);
+                //Gen requests doesn't actually do it correctly!
+                GenRequests(&R_l, L[v],v);
+                GenRequests(&R_h, H[v],v);
+                std::cout<<"Requests generated"<<std::endl;
+                std::cout<<R_l.size()<<" and "<<R_h.size()<<std::endl;
+
+            }
+
+            for (auto elem : R_l){ //do in parallel
+                std::cout<<"Element removal..."<<std::endl;
+                R_l.erase(elem);
+                std::cout<<"Element removed?"<<std::endl;
+                relax(elem[0],elem[1],elem[2], delta, distance);
+                std::cout<<"Lightweight relaxed"<<std::endl;
+
+            }
+        }
+        for (auto elem : R_h){ //do in parallel
+            R_h.erase(elem);
+            relax(elem[0],elem[1],elem[2], delta, distance);
+            std::cout<<"Heavyweight relaxed"<<std::endl;
+
+        };
+        int i = 1;
+        //find first non-empty bucket index and set that to k
+        while(!buckets[i].empty()){
+            i++;
+        }
+        k = i;
+    }
+}
