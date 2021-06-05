@@ -6,15 +6,6 @@
 //
 
 #include "shortestpath.hpp"
-#include <stdio.h>
-#include <stdlib.h>
-#include <thread>
-#include <stack>
-#include <iostream>
-#include <sys/time.h>
-#include <set>
-#include <limits.h>
-#include <stdio.h>
 #define MAX 214
 #define INF -1
 //First implementing Djikstra in parallel
