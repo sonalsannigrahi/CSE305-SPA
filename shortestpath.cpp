@@ -123,10 +123,11 @@ void djikstra_parallel(size_t num_processors,int graph[V][V], int src, int tgt){
      return 0;
  } */
 
+
 // delta-stepping method
 static int thread_num;
 int vertex_num, edge_num, min, c;
-int **adjacency_matrix;
+int **adjacency_matrix, *distance;
 //bool *visit;//true means visiting done, otherwise false
 
 std::vector<std::pair <int,int>> N_l;
@@ -137,7 +138,9 @@ void relax(int u, int v, int w, int delta, std::vector<int> distance){
     if(distance[v] + w < distance[u]){
         int i = distance[u]/delta;
         int j = (distance[v] + w)/delta;
-        buckets[i].erase(u);
+        int remove= *buckets[i].find(u); //do in parallel
+        buckets[i].erase(remove);
+        //buckets[i].erase(u);
         buckets[j].insert(u);
         distance[u] = distance[v] + w;
         return;;
@@ -145,14 +148,17 @@ void relax(int u, int v, int w, int delta, std::vector<int> distance){
     return;;
 }
 
-void GenRequests(std::set<std::vector<int>>* R, std::set<int> N, int v){
+std::set<std::vector<int>>* GenRequests(std::set<std::vector<int>>* R, std::set<int> N, int v){
     for (auto u : N){
         std::vector<int> elem;
         elem.push_back(u);
         elem.push_back(v);
         elem.push_back(adjacency_matrix[u][v]);
         R->insert(elem);
+        std::cout<<"Inserted something in R "<<std::endl;
     }
+    std::cout<<"returning R "<<std::endl;
+    return R;
 }
 
 int main(int argc, char *argv[]){
@@ -167,7 +173,7 @@ int main(int argc, char *argv[]){
     const char *INPUT_NAME = argv[2];
     const char *OUTPUT_NAME = argv[3];
     const int source = atoi(argv[4]) - 1;
-    const int delta = 2; //to be made into an argv input (was giving errors before!)
+    const int delta = 3; //to be made into an argv input (was giving errors before!)
     //load vertex&edge information
     FILE *fh_in, *fh_out;
     fh_in = fopen(INPUT_NAME,"r");
@@ -198,6 +204,7 @@ int main(int argc, char *argv[]){
         adjacency_matrix[b - 1][a - 1] = weight;
     }
     
+    //auxiliary to deal with neighbours
     for(int i=0; i<vertex_num; i++){
         for(int j=0; j<vertex_num; j++){
             int edge =adjacency_matrix[i][j];
@@ -212,14 +219,17 @@ int main(int argc, char *argv[]){
             }
         }
     }
-    std::vector<std::set<int> >L(vertex_num);
+    
+    std::vector<std::set<int>> L(vertex_num);
     std::vector<std::set<int>> H(vertex_num);
     
+    //structure of L and H-> [{neighbours of v1}, {neighbours of v2},....]
     for(auto iter: N_l){
+        //defining light weight vertex neighbours
         L[iter.first].insert(iter.second);
     }
-    
     for(auto iter: N_h){
+        //defining heavy weight vertex neighbours
         H[iter.first].insert(iter.second);
     }
     fclose(fh_in);
@@ -236,34 +246,38 @@ int main(int argc, char *argv[]){
 
     int k = 0;
     while(k < MAX){
+        //define heavy and light requests
         std::set<std::vector<int>> R_h;
         std::set<std::vector<int>> R_l;
-        std::cout<<"Requests created"<<std::endl;
+        for(auto elem: buckets[k]){
+            std::cout<<elem<<std::endl;
+
+        }
         while(!buckets[k].empty()){
-            for (auto v : buckets[k]){ //do in parallel
-                buckets[k].erase(v);
+            while(!buckets[k].empty()){
+                int v= *buckets[k].begin(); //do in parallel
+                buckets[k].erase(buckets[k].begin());
                 //Gen requests doesn't actually do it correctly!
-                GenRequests(&R_l, L[v],v);
-                GenRequests(&R_h, H[v],v);
-                std::cout<<"Requests generated"<<std::endl;
-                std::cout<<R_l.size()<<" and "<<R_h.size()<<std::endl;
-
+                auto *res_L = GenRequests(&R_l, L[v],v);
+                auto *res_H = GenRequests(&R_h, H[v],v);
+                R_l.insert(res_L->begin(), res_L->end());
+                R_h.insert(res_H->begin(), res_H->end());
             }
-
-            for (auto elem : R_l){ //do in parallel
-                std::cout<<"Element removal..."<<std::endl;
-                R_l.erase(elem);
-                std::cout<<"Element removed?"<<std::endl;
+            while(!R_l.empty()){ //do in parallel
+                //Relax light weight requests
+                std::vector<int> elem = *R_l.begin();
+                R_l.erase(R_l.begin());
                 relax(elem[0],elem[1],elem[2], delta, distance);
-                std::cout<<"Lightweight relaxed"<<std::endl;
+                std::cout<<"Lightweights relaxed"<<std::endl;
 
             }
         }
-        for (auto elem : R_h){ //do in parallel
-            R_h.erase(elem);
+        while(!R_h.empty()){ //do in parallel
+            //Relax heavy weight requests
+            std::vector<int> elem = *R_h.begin();
+            R_h.erase(R_h.begin());
             relax(elem[0],elem[1],elem[2], delta, distance);
-            std::cout<<"Heavyweight relaxed"<<std::endl;
-
+            std::cout<<"Heavyweights relax"<<std::endl;
         };
         int i = 1;
         //find first non-empty bucket index and set that to k
@@ -271,5 +285,7 @@ int main(int argc, char *argv[]){
             i++;
         }
         k = i;
+        std::cout<<i<<std::endl;
+
     }
 }
