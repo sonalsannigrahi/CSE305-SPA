@@ -123,38 +123,39 @@ void djikstra_parallel(size_t num_processors,int graph[V][V], int src, int tgt){
      return 0;
  } */
 
-
 // delta-stepping method
 static int thread_num;
 int vertex_num, edge_num, min, c;
-int **adjacency_matrix, *distance;
+int **adjacency_matrix;
+std::vector<int> parent;
+
 //bool *visit;//true means visiting done, otherwise false
 
 std::vector<std::pair <int,int>> N_l;
 std::vector<std::pair <int,int>> N_h;
 std::set<int> buckets[MAX+1];
 
-void relax(int u, int v, int w, int delta, std::vector<int> distance){
+std::vector<int> relax(int u, int v, int w, int delta, std::vector<int> distance){
     if(distance[v] + w < distance[u]){
         int i = distance[u]/delta;
         int j = (distance[v] + w)/delta;
-        int remove= *buckets[i].find(u); //do in parallel
+        int remove= *buckets[i].find(u);
         buckets[i].erase(remove);
-        //buckets[i].erase(u);
         buckets[j].insert(u);
         distance[u] = distance[v] + w;
-        return;;
+        parent[u] = v;
+        return distance;
     }
-    return;;
+    return distance;
 }
 
-std::set<std::vector<int>>* GenRequests(std::set<std::vector<int>>* R, std::set<int> N, int v){
+std::set<std::vector<int>> GenRequests(std::set<std::vector<int>> R, std::set<int> N, int v){
     for (auto u : N){
         std::vector<int> elem;
         elem.push_back(u);
         elem.push_back(v);
         elem.push_back(adjacency_matrix[u][v]);
-        R->insert(elem);
+        R.insert(elem);
         std::cout<<"Inserted something in R "<<std::endl;
     }
     std::cout<<"returning R "<<std::endl;
@@ -164,7 +165,7 @@ std::set<std::vector<int>>* GenRequests(std::set<std::vector<int>>* R, std::set<
 int main(int argc, char *argv[]){
     //check type of argument
     if (argc != 5) {
-        fprintf(stderr, "Insuficcient arguments\n");
+        fprintf(stderr, "Insufficient arguments\n");
         fprintf(stderr, "Usage: ./%s thread input_file output_file source_id \n", argv[0]);
         exit(EXIT_FAILURE);
     }
@@ -173,7 +174,7 @@ int main(int argc, char *argv[]){
     const char *INPUT_NAME = argv[2];
     const char *OUTPUT_NAME = argv[3];
     const int source = atoi(argv[4]) - 1;
-    const int delta = 3; //to be made into an argv input (was giving errors before!)
+    const int delta = 1; //to be made into an argv input (was giving errors before!)
     //load vertex&edge information
     FILE *fh_in, *fh_out;
     fh_in = fopen(INPUT_NAME,"r");
@@ -237,10 +238,11 @@ int main(int argc, char *argv[]){
     std::vector<int> distance(vertex_num);
     for(int v=0; v< vertex_num; v++){
         distance[v] = MAX;
+        parent.push_back(INF);
         buckets[MAX].insert(v);
     }
-    
     distance[source] = 0;
+    parent[source] = source;
     buckets[MAX].erase(source);
     buckets[0].insert(source);
 
@@ -249,25 +251,22 @@ int main(int argc, char *argv[]){
         //define heavy and light requests
         std::set<std::vector<int>> R_h;
         std::set<std::vector<int>> R_l;
-        for(auto elem: buckets[k]){
-            std::cout<<elem<<std::endl;
-
-        }
         while(!buckets[k].empty()){
             while(!buckets[k].empty()){
                 int v= *buckets[k].begin(); //do in parallel
                 buckets[k].erase(buckets[k].begin());
-                //Gen requests doesn't actually do it correctly!
-                auto *res_L = GenRequests(&R_l, L[v],v);
+                /*auto *res_L = GenRequests(&R_l, L[v],v);
                 auto *res_H = GenRequests(&R_h, H[v],v);
                 R_l.insert(res_L->begin(), res_L->end());
-                R_h.insert(res_H->begin(), res_H->end());
+                R_h.insert(res_H->begin(), res_H->end());*/
+                R_l = GenRequests(R_l, L[v],v);
+                R_h = GenRequests(R_h, H[v],v);
             }
             while(!R_l.empty()){ //do in parallel
                 //Relax light weight requests
                 std::vector<int> elem = *R_l.begin();
                 R_l.erase(R_l.begin());
-                relax(elem[0],elem[1],elem[2], delta, distance);
+                distance = relax(elem[0],elem[1],elem[2], delta, distance);
                 std::cout<<"Lightweights relaxed"<<std::endl;
 
             }
@@ -276,16 +275,46 @@ int main(int argc, char *argv[]){
             //Relax heavy weight requests
             std::vector<int> elem = *R_h.begin();
             R_h.erase(R_h.begin());
-            relax(elem[0],elem[1],elem[2], delta, distance);
+            distance = relax(elem[0],elem[1],elem[2], delta, distance);
             std::cout<<"Heavyweights relax"<<std::endl;
         };
-        int i = 1;
-        //find first non-empty bucket index and set that to k
-        while(!buckets[i].empty()){
+        
+        //find the smallest non-empty bucket
+        int i =0;
+        while(buckets[i].empty()){
             i++;
         }
         k = i;
-        std::cout<<i<<std::endl;
-
     }
+    //write file
+    for(int i=0; i< vertex_num; i++){
+        std::cout<<i+1<< " and parent "<< parent[i]<< " and shortest distance "<< distance[i]<<std::endl;
+    }
+    
+    //parents vector is wrong, distances are correct!
+    fh_out = fopen(OUTPUT_NAME,"w");
+    if(fh_out == NULL){
+        printf("Output file open failed.\n");
+    }
+    std::stack<int> S;
+    for(int i = 0; i < vertex_num; i++){
+        int in_stack = i;
+        S.push(in_stack);
+        while(S.top() != source){
+            in_stack = parent[in_stack];
+            S.push(in_stack);
+        }
+        fprintf(fh_out,"%d", source + 1);
+    
+        while(!S.empty()){
+            if(S.top() == source && i != source) {
+                S.pop();
+                continue;
+            }
+            fprintf(fh_out," %d", S.top() + 1);
+            S.pop();
+        }
+        fprintf(fh_out,"\n");
+    }
+    fclose(fh_out);
 }
