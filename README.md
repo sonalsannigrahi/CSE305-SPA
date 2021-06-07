@@ -10,3 +10,7 @@ make
 for example:
 
 ./shortestpath 5 test.txt result_mine.txt 3
+
+**Current Issues**
+
+In ∆-Stepping: while loop runs forever? k is not updated correctly!
