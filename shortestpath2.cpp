@@ -17,6 +17,7 @@
 #include <random>
 #include <algorithm>
 #include <vector>
+#include <iostream>
 #include <utility>
 // Number of vertices in the graph
 #define V 9
@@ -153,20 +154,155 @@ Step 1: finds global minimum of Q*
 //void dijkstra(){
 //
 //}
-typedef std::vector<int> Queue;
 
-Queue TwoQueueInit(Queue Q){}
-Queue TwoQueueInsert(Queue Q, Node j){}
-Queue TwoQueueRemove(Queue Q, Node j){}
-Path TwoQueue(Graph G){
-    Queue Q;
-    TwoQueueInit(Q);
-    for (int i=0;i<G.Nodes.size();i++){
-        G.s;
-        while (Q.size()){
-            TwoQueueRemove(Q,G.Nodes[i]);
+class Queue{
+    public:
+    Queue(){}
+    std::deque<Node> Q1;
+    std::deque<Node> Q2;
+    std::deque<Node> tot_queue(){
+        std::deque<Node> Q3;
+        for (int i=0;i<this->Q1.size();i++){
+            Q3.push_back(Q1[i]);
+        }
+        for (int j=0;j<this->Q2.size();j++){
+            Q3.push_back(Q2[j]);
+        }
+        return Q3;
+    };
+};
 
+void printSolution(std::vector<std::vector<int> > Q)
+{
+    printf("Vertex \t\t Path\n");
+    for (int i = 0; i < Q.size(); i++){
+        for(int j=0; j<Q[i].size();j++){
+            printf("%d \t\t %d\n", i, Q[i][j]);
         }
     }
+}
 
+void TwoQueueInit(Graph G,Queue Q){
+    for (int i=0; i<G.Nodes.size();i++){
+        Q.Q1.push_back(G.Nodes[i]);
+    }
+}
+void TwoQueueInsert(Queue Q, Node j){
+    bool b=0;
+    Node n;
+    std::deque<Node> Q1=Q.tot_queue();
+    for (int i=0; i<Q1.size();i++){
+        if (j.index==Q1[i].index){
+            b=1;
+            n=Q1[i];
+        }
+    }
+    if (b){
+        if(n.status==0){
+            Q.Q1.push_back(n);
+        }
+        else if (n.status==1){
+            Q.Q2.push_back(n);
+        }
+    }
+}
+void TwoQueueRemove(Queue Q, Node j){
+    Q.Q1.pop_front();
+}
+std::vector<std::vector<int> > TwoQueue(Graph G){
+    Queue Q;
+    std::vector<std::vector<int> > path;
+    TwoQueueInit(G,Q);
+    G.s.dist=0;
+    G.s.status=2;
+    for (int i=0;i<G.Nodes.size();i++){
+        while (Q.tot_queue().size()){
+            TwoQueueRemove(Q,G.Nodes[i]);
+            for (int j=0; j<G.Nodes[i].AdjNodes.size();j++){
+                if (G.Nodes[i].AdjNodes[j].first.dist>G.Nodes[i].dist+G.Nodes[i].AdjNodes[j].second){
+                    G.Nodes[i].AdjNodes[j].first.dist=G.Nodes[i].dist+G.Nodes[i].AdjNodes[j].second;
+                    TwoQueueInsert(Q,G.Nodes[i].AdjNodes[j].first);
+                    G.Nodes[i].AdjNodes[j].first.status=1;
+                }
+            }
+        }
+    }
+    return path;
+}
+
+std::vector<Graph> GraphPartitioning(Graph G,int proc){//N number of nodes for each graphs
+    std::vector<Graph> Graphs;
+    for (int i=0; i<G.Nodes.size();i++){
+        
+    }
+    return Graphs;
+}
+
+//Path ParallelSSSP(Graph G, Node s){
+//
+//}
+
+int main(){
+    std::vector<Node> Nodes;
+    std::vector<std::pair<Node,Edge> > vect;
+    std::vector<std::pair<Node,Edge> > vect2;
+    std::vector<std::pair<Node,Edge> > vect3;
+    std::vector<std::pair<Node,Edge> > vect4;
+    Node n1(1);
+    Node n2(2);
+    Node n3(3);
+    Node n4(4);
+    Node n5(5);
+    Node n6(6);
+    Node s(0);
+    std::pair<Node,Edge> p1(n1,2);
+    std::pair<Node,Edge> p2(n2,3);
+    std::pair<Node,Edge> p3(n3,5);
+    std::pair<Node,Edge> p4(n1,2);
+    std::pair<Node,Edge> p5(n4,6);
+    std::pair<Node,Edge> p6(n2,3);
+    vect.push_back(p1);
+    vect.push_back(p2);
+    //for (int i=0;i<2;i++){
+    //    std::cout<<vect[i].second<<std::endl;
+    //}
+    vect2.push_back(p3);
+    vect3.push_back(p4);
+    vect3.push_back(p5);
+    vect4.push_back(p6);
+    s.AdjNodes=vect;
+    //for (int i=0;i<2;i++){
+    //    std::cout<<s.AdjNodes[i].first.index<<std::endl;
+    //}
+    n2.AdjNodes=vect2;
+    n3.AdjNodes=vect3;
+    n4.AdjNodes=vect4;
+    Nodes.push_back(s);
+    Nodes.push_back(n1);
+    Nodes.push_back(n2);
+    Nodes.push_back(n3);
+    Nodes.push_back(n4);
+    Nodes.push_back(n5);
+    Nodes.push_back(n6);
+    std::vector<std::vector<std::pair<Node,Edge> > > Edges;
+    //for (int i=0;i<Nodes.size();i++){
+    //    Edges.push_back(Nodes[i].AdjNodes);
+    //    for (int j=0; j<Nodes[i].AdjNodes.size();j++){
+    //        std::cout<<Nodes[i].AdjNodes[j].first.index<<std::endl;
+    //    }
+    //}
+    //for (int i=0;i<Edges.size();i++){
+    //    for(int j=0;j<Edges[i].size();j++){
+    //        std::cout<<Edges[i][j].first.index<<std::endl;
+    //    }
+    //}
+    Graph G(Nodes, Edges,s);
+    std::cout<<G.Nodes.size()<<std::endl;
+    //for (int i=0;i<G.Nodes.size();i++){
+    //    //for(int j=0;j<G.Edges[i].size();j++){
+    //        std::cout<<G.Nodes[i].index<<std::endl;
+    //    //}
+    //}
+    std::vector<std::vector<int> > Q=TwoQueue(G);
+    //printSolution(Q);
 }

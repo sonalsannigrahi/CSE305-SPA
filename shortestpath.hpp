@@ -25,9 +25,9 @@ https://old.insight-centre.org/sites/default/files/publications/engineering_a_pa
 #include <sys/time.h>
 #include <set>
 #include <limits.h>
-#include <stdio.h>
+#include <algorithm>
 
-#define INF -1
+#define INF 1000
 typedef unsigned int Edge;
 typedef std::vector<int> Path;
 
@@ -39,6 +39,11 @@ class Node {
             this->AdjNodes=AdjNodes;
             this->dist=dist;
             this->status=status;
+        }
+        Node(int index){
+            this->index=index;
+            this->dist=INF;
+            this->status=0;
         }
         Node(){
             this->dist=INF;
@@ -53,13 +58,13 @@ class Node {
 class Graph{
     public:
         explicit Graph(std::vector<Node> Nodes, std::vector<std::vector<std::pair<Node,Edge> > > Edges, Node s) {
-            for (int i=0;i<Nodes.size();i++){
-                Nodes[i].AdjNodes=Edges[i];
-            }
             this->Edges=Edges;
             this->Nodes=Nodes;
             this->s=s;
-        };
+            for (int i=0;i<Nodes.size();i++){
+                this->Nodes[i].AdjNodes=Edges[i];
+            }
+        }
         std::vector<Node> Nodes;
         std::vector<std::vector<std::pair<Node,Edge> > > Edges;
         Node s;//source node
