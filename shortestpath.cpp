@@ -1,5 +1,12 @@
+//
+//  shortestpath.cpp
+//
+//
+//  Created by Sonal Sannigrahi on 01/05/2021.
+//
 
 #include "shortestpath.hpp"
+#include<thread>
 #define MAX 240886
 #define INF -1
 
@@ -10,7 +17,7 @@ std::vector<std::pair <int,int>> N_l;
 std::vector<std::pair <int,int>> N_h;
 class DeltaStep{
 public:
-     //static int thread_num;
+     int thread_num;
      int vertex_num, edge_num;
      std::vector<int> parent;
      std::set<int> buckets[MAX+1];
@@ -19,7 +26,7 @@ public:
      std::set<int> neighbours;
      std::vector<std::set<int>> L;
      std::vector<std::set<int>> H;
-     
+     std::vector<std::thread> workers;
      //class methods
      
      void relax(int u, int v, int w);
@@ -27,14 +34,16 @@ public:
      std::set<std::vector<int>> GenRequests(std::set<std::vector<int>> R, std::set<int> N, int v);
      
      void deltastepping(int source);
-    
+    std::pair<std::set<std::vector<int>>,std::set<std::vector<int>>> ReqParallel(std::set<std::vector<int>> R_l, std::set<std::vector<int>> R_h, int k);
      bool validate(int source);
     int minDistance(int dist[], bool sptSet[]);
+    void RelaxParallel(std::set<std::vector<int>>& Request);
      //constructor
      
-     DeltaStep(int delta, int vertex_num, int edge_num, std::vector<std::set<int>> L, std::vector<std::set<int>> H){
+     DeltaStep(int delta, int vertex_num, int edge_num, std::vector<std::set<int>> L, std::vector<std::set<int>> H, int thread_num){
          this->delta = delta;
          this->vertex_num = vertex_num;
+         this->thread_num = thread_num;
          this->edge_num = edge_num;
          this->L = L;
          this->H = H;
@@ -71,7 +80,27 @@ public:
      return R;
  }
 
- void DeltaStep::deltastepping(int source){
+
+std::pair<std::set<std::vector<int>>,std::set<std::vector<int>>> DeltaStep::ReqParallel(std::set<std::vector<int>> R_l, std::set<std::vector<int>> R_h, int k){
+    for(auto it = this->buckets[k].begin(); it != this->buckets[k].end();){
+        int v= *this->buckets[k].begin();
+        R_l = DeltaStep::GenRequests(R_l, this->L[v],v);
+        R_h = DeltaStep::GenRequests(R_h, this->H[v],v);
+        this->buckets[k].erase(it++);
+    }
+    return std::make_pair(R_l, R_h);
+    
+}
+
+void DeltaStep::RelaxParallel(std::set<std::vector<int>>& Request){
+    for(auto it= Request.begin(); it !=Request.end();){
+        std::vector<int> elem = *Request.begin();
+        DeltaStep::relax(elem[0],elem[1],elem[2]);
+        Request.erase(it++);
+    }
+}
+
+void DeltaStep::deltastepping(int source){
      this->distance[source] = 0;
      this->parent[source] = source;
      this->buckets[MAX].erase(source);
@@ -83,26 +112,80 @@ public:
          std::set<std::vector<int>> R_h;
          std::set<std::vector<int>> R_l;
          while(!this->buckets[k].empty()){
-             while(!this->buckets[k].empty()){
-                 int v= *this->buckets[k].begin(); //do in parallel
-                 this->buckets[k].erase(this->buckets[k].begin());
-                 R_l = DeltaStep::GenRequests(R_l, this->L[v],v);
-                 R_h = DeltaStep::GenRequests(R_h, this->H[v],v);
+
+             auto req = DeltaStep::ReqParallel(R_l, R_h, k);
+             //to parallelise ^ maybe find each subset R_s in paralle then perform union over the whole thing?
+             R_l = req.first;
+             R_h = req.second;
+             std::cout<<R_l.size()<<std::endl;
+
+             DeltaStep::RelaxParallel(std::ref(R_l));
+             //relax in parallel
+             
+             //create result vector to store subrequests
+             std::vector<std::set<std::vector<int>>> SubRL;
+             auto blockstart = R_l.begin();
+             auto blocksize = R_l.size() / this->thread_num;
+             for(int i=0; i< (this->thread_num - 1); i++){
+                 auto blockend = blockstart;
+                 std::advance(blockend,blocksize);
+                 std::set<std::vector<int>> R;
+                 R.insert(blockstart, blockend); //create new subset with chunked R_l
+                 this->workers.push_back(std::thread(&DeltaStep::RelaxParallel, this, std::ref(R)));
+                 SubRL.push_back(R);
              }
-             while(!R_l.empty()){ //do in parallel
-                 //Relax light weight requests
-                 std::vector<int> elem = *R_l.begin();
-                 R_l.erase(R_l.begin());
-                 DeltaStep::relax(elem[0],elem[1],elem[2]);
-             }
+             std::set<std::vector<int>> R;
+             R.insert(blockstart,R_l.end());
+             DeltaStep::RelaxParallel(R);
+             SubRL.push_back(R);
+
+             for (int i=0; i< (this->thread_num - 1);  i++){
+
+                 if( this->workers[i].joinable()){
+                     this->workers[i].join();
+                 };
+
+             };
+             
+             R_l.clear();
+             for(int it= 0; it < SubRL.size();it++){
+                 if(SubRL[it].size()>0){
+                     R_l.insert(SubRL[it].begin(), SubRL[it].end());
+                 }
+             };
          }
-         while(!R_h.empty()){ //do in parallel
-             //Relax heavy weight requests
-             std::vector<int> elem = *R_h.begin();
-             R_h.erase(R_h.begin());
-             DeltaStep::relax(elem[0],elem[1],elem[2]);
+         //same to be done here once it works
+         DeltaStep::RelaxParallel(std::ref(R_h));
+         /*std::vector<std::set<std::vector<int>>> SubRH;
+         auto blockstart = R_h.begin();
+         auto blocksize = R_h.size() / this->thread_num;
+         for(int i=0; i< (this->thread_num - 1); i++){
+             auto blockend = blockstart;
+             std::advance(blockend,blocksize);
+             std::set<std::vector<int>> Rh;
+             Rh.insert(blockstart, blockend); //create new subset with chunked R_l
+             this->workers.push_back(std::thread(&DeltaStep::RelaxParallel, this, std::ref(Rh)));
+             SubRH.push_back(Rh);
+         }
+         std::set<std::vector<int>> Rh;
+         Rh.insert(blockstart,R_h.end());
+         DeltaStep::RelaxParallel(Rh);
+         SubRH.push_back(Rh);
+
+         for (int i=(this->thread_num - 1); i< 2*(this->thread_num - 1);  i++){
+
+             if( this->workers[i].joinable()){
+                 this->workers[i].join();
+             };
+
          };
          
+         R_h.clear();
+         for(int it= 0; it < SubRH.size();it++){
+             if(SubRH[it].size()>0){
+                 R_h.insert(SubRH[it].begin(), SubRH[it].end());
+             }
+         };*/
          //find the smallest non-empty bucket
          int i =0;
          while(this->buckets[i].empty()){
@@ -228,11 +311,18 @@ bool DeltaStep::validate(int source){
      
      //create instance of DeltaStep
      
-     DeltaStep main_algorithm(delta, vertex_num, edge_num, L, H);
+     DeltaStep main_algorithm(delta, vertex_num, edge_num, L, H, thread_num);
+     //compute speedup
+     using std::chrono::high_resolution_clock;
+     using std::chrono::duration_cast;
+     using std::chrono::duration;
+     using std::chrono::milliseconds;
      
+     auto t1 = high_resolution_clock::now();
      main_algorithm.deltastepping(source);
-
-
+     auto t2 = high_resolution_clock::now();
+     duration<double, std::milli> ms_double = t2 - t1;
+     std::cout<<"It took "<<ms_double.count()<<" milliseconds for execution"<<std::endl;
      //write file
      for(int i=0; i< main_algorithm.vertex_num; i++){
          std::cout<<i+1<< " and parent "<< main_algorithm.parent[i]<< " and shortest distance "<< main_algorithm.distance[i]<<std::endl;
