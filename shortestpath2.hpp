@@ -28,7 +28,7 @@ https://old.insight-centre.org/sites/default/files/publications/engineering_a_pa
 #include <limits.h>
 #include <stdio.h>
 
-#define INF -1
+//#define INF -1
 typedef unsigned int Edge;
 typedef std::vector<int> Path;
 

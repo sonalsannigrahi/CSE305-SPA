@@ -35,12 +35,6 @@ typedef std::vector<int> Path;
 
 class Node {
     public:
-        //Node(int index, std::vector<std::pair<Node,Edge> > AdjNodes,int dist=INF,int status=0){
-        //    this->index=index;
-        //    this->AdjNodes=AdjNodes;
-        //    this->dist=dist;
-        //    this->status=status;
-        //}
         Node(int index){
             this->index=index;
             this->dist=INF;
@@ -52,23 +46,19 @@ class Node {
         }
         int index;//index of the node
         int dist;//minimal distance between the source node and the node, can change
-        //Node parentNode; one of the IN nodes...?
+        std::vector<Node*> ParNodes; //one of the IN nodes...?
         int status;//0=unvisited, 1=tempo labeled 2=perma labeled
+        int GraphIndex;
         std::vector<std::pair<Node*,Edge> > AdjNodes; //OUT nodes, not IN, vectors of pair (destination node, weight)
         void add_AdjNodes(std::pair<Node*,Edge> p1){
             this->AdjNodes.push_back(p1);
         };
+        void add_ParNodes(Node* node){
+            this->ParNodes.push_back(node);
+        };
 };
 class Graph{
     public:
-        //Graph(std::vector<Node> Nodes, std::vector<std::vector<std::pair<Node,Edge> > > Edges, Node s) {
-        //    this->Edges=Edges;
-        //    this->Nodes=Nodes;
-        //    this->s=s;
-        //    for (int i=0;i<Nodes.size();i++){
-        //        this->Nodes[i].AdjNodes=Edges[i];
-        //    }
-        //}
         Graph(){}
         void add_edges(int i, int j, Edge w){
             for (int k=0;k<this->Nodes.size();k++){
@@ -77,40 +67,37 @@ class Graph{
                         if(j==this->Nodes[s]->index){
                             std::pair<Node*,Edge> p1(this->Nodes[s],w);
                             this->Nodes[k]->add_AdjNodes(p1);
+                            this->Nodes[s]->add_ParNodes(this->Nodes[k]);
                         }
                     }
                 }
             }
         };
-        void add_nodes(std::vector<Node*> Nodes,int s){
-            for (int i=0;i<Nodes.size();i++){
-                if(i==s){
-                    this->s=Nodes[i];
-                    this->s->dist=0;
-                    this->s->status=2;
-                    this->Nodes.push_back(this->s);
-                }
-                else {
-                    this->Nodes.push_back(Nodes[i]);
-                }
+        void add_nodes(int index,bool s){
+            Node* node= new Node(index);
+            if(s){
+                this->s=node;
+                this->s->dist=0;
+                this->s->status=2;
+                this->Nodes.push_back(this->s);
+            }
+            else{
+                this->Nodes.push_back(node);
+            }
+        }
+        void add_nodes (Node* node, bool s){
+            if (s){
+                this->s=node;
+                this->Nodes.push_back(this->s);
+            }
+            else { 
+                this->Nodes.push_back(node);
             }
         }
         std::vector<Node*> Nodes;
-        std::vector<std::vector<std::pair<Node*,Edge> > > Edges;
+        std::vector<int> AdjGraphs;
+        int index;
         Node* s;//source node
-        //std::vector<std::vector<std::pair<Node*,Edge> > > get_edges(){
-        //    return this->Edges;
-        //}
-        //std::vector<Node*> get_Nodes(){
-        //    return this->Nodes;
-        //}
-        //std::vector<Node> Neighbours(Node node){
-        //    std::vector<Node> list;
-        //    for(int i=0; i<node.AdjNodes.size();i++){
-        //        list.push_back(node.AdjNodes[i].first);
-        //    }
-        //    return list;
-        //}
     };
         
 #endif /* shortestpath_hpp */

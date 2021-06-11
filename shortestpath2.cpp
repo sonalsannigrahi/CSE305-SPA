@@ -6,106 +6,52 @@
 //
 
 #include "shortestpath.hpp"
-
+//#include "./metis-5.1.0/libmetis/kmetis.c"
 //First implementing Djikstra in parallel
 
 //sequential djikstra for comparison
-
 #include <limits.h>
 #include <stdio.h>
 #include <queue>
 #include <random>
 #include <algorithm>
 #include <vector>
+#include <thread>
 #include <iostream>
+#include <fstream>
 #include <functional>
+#include <functional>
+#include <mutex>
 #include <utility>
+#include <string>
 // Number of vertices in the graph
 #define V 9
-  
-// A utility function to find the vertex with minimum distance value, from
-// the set of vertices not yet included in shortest path tree
-//int minDistance(int dist[], bool sptSet[])
-//{
-//    // Initialize min value
-//    int min = INT_MAX, min_index;
-//  
-//    for (int v = 0; v < V; v++)
-//        if (sptSet[v] == false && dist[v] <= min)
-//            min = dist[v], min_index = v;
-//  
-//    return min_index;
-//}
-//  
-//// A utility function to print the constructed distance array
-//void printSolution(int dist[])
-//{
-//    printf("Vertex \t\t Distance from Source\n");
-//    for (int i = 0; i < V; i++)
-//        printf("%d \t\t %d\n", i, dist[i]);
-//}
-//  
-//// Function that implements Dijkstra's single source shortest path algorithm
-//// for a graph represented using adjacency matrix representation
-//void dijkstra(int graph[V][V], int src)
-//{
-//    int dist[V]; // The output array.  dist[i] will hold the shortest
-//    // distance from src to i
-//  
-//    bool sptSet[V]; // sptSet[i] will be true if vertex i is included in shortest
-//    // path tree or shortest distance from src to i is finalized
-//  
-//    // Initialize all distances as INFINITE and stpSet[] as false
-//    for (int i = 0; i < V; i++)
-//        dist[i] = INT_MAX, sptSet[i] = false;
-//  
-//    // Distance of source vertex from itself is always 0
-//    dist[src] = 0;
-//  
-//    // Find shortest path for all vertices
-//    for (int count = 0; count < V - 1; count++) {
-//        // Pick the minimum distance vertex from the set of vertices not
-//        // yet processed. u is always equal to src in the first iteration.
-//        int u = minDistance(dist, sptSet);
-//  
-//        // Mark the picked vertex as processed
-//        sptSet[u] = true;
-//  
-//        // Update dist value of the adjacent vertices of the picked vertex.
-//        for (int v = 0; v < V; v++)
-//  
-//            // Update dist[v] only if is not in sptSet, there is an edge from
-//            // u to v, and total weight of path from src to  v through u is
-//            // smaller than current value of dist[v]
-//            if (!sptSet[v] && graph[u][v] && dist[u] != INT_MAX
-//                && dist[u] + graph[u][v] < dist[v])
-//                dist[v] = dist[u] + graph[u][v];
-//    }
-//  
-//    // print the constructed distance array
-//    printSolution(dist);
-//}
-//  
-//// driver program to test above function
-//int main()
-//{
-//    /* Let us create the example graph discussed above */
-//    int graph[V][V] = { { 0, 4, 0, 0, 0, 0, 0, 8, 0 },
-//                        { 4, 0, 8, 0, 0, 0, 0, 11, 0 },
-//                        { 0, 8, 0, 7, 0, 4, 0, 0, 2 },
-//                        { 0, 0, 7, 0, 9, 14, 0, 0, 0 },
-//                        { 0, 0, 0, 9, 0, 10, 0, 0, 0 },
-//                        { 0, 0, 4, 14, 10, 0, 2, 0, 0 },
-//                        { 0, 0, 0, 0, 0, 2, 0, 1, 6 },
-//                        { 8, 11, 0, 0, 0, 0, 1, 0, 7 },
-//                        { 0, 0, 2, 0, 0, 0, 6, 7, 0 } };
-//  
-//    dijkstra(graph, 0);
-//  
-//    return 0;
-//}
-
-
+Graph build_graph(int graph[],int nbNodes_start,int nbNodes_end,int s){
+    Graph G;
+    std::vector<Node*> Nodes;
+    for (int i=nbNodes_start;i<nbNodes_end;i++){
+        if(i==s){
+            G.add_nodes(i,1);
+        }
+        else{
+            G.add_nodes(i,0);
+        }
+    }
+    int j=nbNodes_start;
+    int width=nbNodes_start;
+    int len=nbNodes_end-nbNodes_start;
+    for (int i=nbNodes_start;i<len*len;i++){
+        if(graph[i]){
+            G.add_edges(j,width,graph[i]);
+            }
+        width++;
+        if(width==len){
+            j++;
+            width=0;
+        }
+    }
+    return G;
+}
 
 class Queue{
     public:
@@ -129,7 +75,7 @@ class Queue{
 
 void printSolution(std::vector<int> Q)
 {
-    printf("Vertex \t\t Path\n");
+    printf("Vertex \t\t Distance from the source\n");
     for (int i = 0; i < Q.size(); i++){
             printf("%d \t\t %d\n", i, Q[i]);
     }
@@ -157,6 +103,7 @@ void Queue::TwoQueueInsert(Node* j){
         }
     }
 }
+
 void Queue::TwoQueueRemove(Node* j){
     if(Q1.size()){
         if (Q1[0]->index==j->index){
@@ -194,55 +141,160 @@ std::vector<int> TwoQueue(Graph G){
     return path;
 }
 
-std::vector<Graph> GraphPartitioning(Graph G,int proc){//N number of nodes for each graphs
-    std::vector<Graph> Graphs;
-    for (int i=0; i<G.Nodes.size();i++){
-        
+/*graph partiioning:
+Input: graph, nb of processors using
+Output: an array of partitioned graphs
+for each node, set the graph nb when partitioning
+also, for each graph, set the adjacent graph vector
+
+*/
+
+std::vector<Graph> GraphPartitioning(Graph G,int proc,int s){
+    std::vector<Graph> graphs;
+    std::fstream file;
+    int index=0;
+    file.open("data",std::ios::in);
+    if(!file){
+        std::cout<<"no file"<<std::endl;
     }
-    return Graphs;
+    else{
+        std::string ch;
+        for (int i=0;i<G.Nodes.size();i++){
+            if(file.eof() && i!=G.Nodes.size()-1){
+                std::cout<<"bad file"<<std::endl;
+                break;
+            }
+            file >>ch;
+            //size_t end=ch.find_last_not_of("\n");
+            //std::string sch=ch.substr(0,end+1);
+            int n=stoi(ch);
+            G.Nodes[index]->GraphIndex=n;
+            index++;
+        }
+    }
+    for (int p=0;p<proc;p++){
+        Graph* G1 = new Graph;
+        for (int r=0;r<G.Nodes.size();r++){
+            if(G.Nodes[r]->GraphIndex==p){
+                if (G.Nodes[r]->index==s){
+                    G1->add_nodes(G.Nodes[r],1);
+                }
+                else{
+                    G1->add_nodes(G.Nodes[r],0);
+                }
+            }
+        }
+        G1->index=p;
+        for (int k=0;k<G1->Nodes.size();k++){
+            for (int w=0;w<G1->Nodes[k]->AdjNodes.size();w++){
+                if(G1->Nodes[k]->AdjNodes[w].first->GraphIndex!=G1->index){
+                    G1->AdjGraphs.push_back(G1->Nodes[k]->AdjNodes[w].first->GraphIndex);
+                }
+            }
+        }
+        graphs.push_back(*G1);
+    }
+    return graphs;
 }
 
-//Path ParallelSSSP(Graph G, Node s){
-//
-//}
-int main(){
-    std::vector<Node*> Nodes;
-    Node n1(1);
-    Node n2(2);
-    Node n3(3);
-    Node n4(4);
-    Node n5(5);
-    Node n6(6);
-    Node s(0);
-    Nodes.push_back(&s);
-    Nodes.push_back(&n1);
-    Nodes.push_back(&n2);
-    Nodes.push_back(&n3);
-    Nodes.push_back(&n4);
-    Nodes.push_back(&n5);
-    Nodes.push_back(&n6);
-    Graph G;
-    G.add_nodes(Nodes,0);
-    G.add_edges(0,1,2);
-    G.add_edges(1,0,2);
-    G.add_edges(0,2,3);
-    G.add_edges(2,0,3);
-    G.add_edges(2,3,5);
-    G.add_edges(3,2,5);
-    G.add_edges(2,4,3);
-    G.add_edges(4,2,3);
-    G.add_edges(3,4,1);
-    G.add_edges(4,3,1);
-    G.add_edges(3,5,6);
-    G.add_edges(5,3,6);
-    G.add_edges(4,1,3);
-    G.add_edges(1,4,3);
-    G.add_edges(5,6,2);
-    G.add_edges(6,5,2);
-    G.add_edges(4,6,2);
-    G.add_edges(6,4,2);
-    G.add_edges(6,1,2);
-    G.add_edges(1,6,2);
+void addMessage(std::vector<int> Messagearray,Node* node){
+    std::mutex lk;
+    lk.lock();
+    lk.unlock();
+}
+std::vector<std::pair<Node*,int> > ParDijk(Graph G){
+    Queue Q;
+    Q.TwoQueueInit(G);
+    std::vector<std::pair<Node*,int> > path;
+    while(true){
+        while (Q.tot_queue().size()){
+            for (int i=0;i<G.Nodes.size();i++){
+                Q.TwoQueueRemove(G.Nodes[i]);
+                for (int j=0; j<G.Nodes[i]->AdjNodes.size();j++){
+                    if (G.Nodes[i]->AdjNodes[j].first->dist>G.Nodes[i]->dist+G.Nodes[i]->AdjNodes[j].second){
+                        G.Nodes[i]->AdjNodes[j].first->dist=G.Nodes[i]->dist+G.Nodes[i]->AdjNodes[j].second;
+                        Q.TwoQueueInsert(G.Nodes[i]->AdjNodes[j].first);
+                        G.Nodes[i]->AdjNodes[j].first->status=1;
+                    }
+                }
+                int sendTag=0;//maybe should be atomic or smth..? idk or lock and unlock while adding
+                std::vector<Node*> sucNodes;
+                for (int k=0; k<G.Nodes[i]->AdjNodes.size();k++){
+                    if(G.Nodes[i]->AdjNodes[k].first->GraphIndex!=G.Nodes[i]->GraphIndex){
+                        sucNodes.push_back(G.Nodes[i]->AdjNodes[k].first);
+                    }
+                }
+                for(int g=0;g<G.AdjGraphs.size();g++){
+                    for (int r=0;r<sucNodes.size();r++){
+                        if (sucNodes[r]->dist>G.Nodes[i]->dist+sucNodes[r]->dist){
+                            //add info to messagearray
+                            sendTag=1;
+                        }
+                    }
+                }
+            }
+            int ExitFlag;
+            if(!ExitFlag){
+                int m;//nb of received nodes from current proc n
+                for (int i=0;i<G.AdjGraphs.size();i++){
+                    //send and receive message array
+                }
+                for (int j=0;j<m;j++){
+
+                }
+            }
+            else{
+                break;
+            }
+        }
+    }
+        for (int i=0; i<G.Nodes.size();i++){
+            G.Nodes[i]->status=2;
+            std::pair<Node*,Edge> p1(G.Nodes[i],G.Nodes[i]->dist);
+            path.push_back(p1);
+
+    }
+    return path;
+}
+
+std::vector<std::pair<Node*,int> > ParallelSSSP(Graph G, int proc){
+    Queue Q;
+    std::vector<Graph> graphs=GraphPartitioning(G,proc,0);
+    std::vector<std::thread> thread(proc);
+    std::vector<std::vector<std::pair<Node*, int> > > results(proc);
+    std::vector<std::pair<Node*, int> > paths;
+    for (int i=0;i<proc;i++){
+        //thread[i]=std::thread(ParDijk,graphs[i],std::ref(results[i]));
+    }
+    std::for_each(thread.begin(),thread.end(),std::mem_fn(&std::thread::join));
+    for (int j=0; j<proc;j++){
+        for (int k=0;j<results[j].size();k++){
+            paths.push_back(results[j][k]);
+        }
+    }
+    return paths;
+}
+void printSolution(std::vector<std::pair<Node*,int> > paths)
+{
+    printf("Vertex \t\t Distance from the source\n");
+    for (int i = 0; i < paths.size(); i++){
+            printf("%d \t\t %d\n", paths[i].first->index, paths[i].second);
+    }
+}
+int main()
+{
+    /* Let us create the example graph discussed above */
+    int graph[V*V] = {  0, 4, 0, 0, 0, 0, 0, 8, 0 ,
+                         4, 0, 8, 0, 0, 0, 0, 11, 0 ,
+                         0, 8, 0, 7, 0, 4, 0, 0, 2 ,
+                         0, 0, 7, 0, 9, 14, 0, 0, 0 ,
+                         0, 0, 0, 9, 0, 10, 0, 0, 0 ,
+                         0, 0, 4, 14, 10, 0, 2, 0, 0 ,
+                         0, 0, 0, 0, 0, 2, 0, 1, 6 ,
+                         8, 11, 0, 0, 0, 0, 1, 0, 7 ,
+                         0, 0, 2, 0, 0, 0, 6, 7, 0 } ;
+    Graph G=build_graph(graph,0,9,0);
     std::vector<int> Q=TwoQueue(G);
     printSolution(Q);
+    return 0;
 }
