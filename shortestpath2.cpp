@@ -6,11 +6,10 @@
 //
 
 #include "shortestpath.hpp"
-//#include "./metis-5.1.0/libmetis/kmetis.c"
 //First implementing Djikstra in parallel
 
 //sequential djikstra for comparison
-#include <limits.h>
+#include <limits.h> 
 #include <stdio.h>
 #include <queue>
 #include <random>
@@ -20,13 +19,13 @@
 #include <iostream>
 #include <fstream>
 #include <functional>
-#include <functional>
 #include <mutex>
 #include <utility>
 #include <string>
+#include <chrono>
 // Number of vertices in the graph
 #define V 9
-
+std::mutex lk;
 //input: array of n*n weights, the index of the node to start and to end (was planning to use this for big graphs, but not useful anymore), source index s
 Graph build_graph(int graph[],int nbNodes_start,int nbNodes_end,int s){
     Graph G;
@@ -56,42 +55,18 @@ Graph build_graph(int graph[],int nbNodes_start,int nbNodes_end,int s){
 }
 
 //input: filename of the txt created by the parser, index of the source node s
-Graph build_graph(char* filename,int s){
+Graph build_graph(const char* filename,int s){
     Graph G;
-    std::fstream file;
-    file.open(filename,std::ios::in);
+    FILE* file;
+    file=fopen(filename,"r");
     int i=0;
     int nbv,nbe,v1,v2,w;
+    std::string ch;
     if(!file){
         std::cout<<"no file"<<std::endl;
     }
     else{
-        while(true){
-            if (i==0){
-                std::string ch;
-                file>>ch;
-                size_t end=ch.find_last_not_of(" ");
-                std::string sch=ch.substr(0,end+1);
-                std::string s2ch=ch.substr(end+2);
-                nbv=stoi(sch);
-                nbe=stoi(s2ch);
-            }
-            else{
-                std::string ch;
-                file>>ch;
-                size_t end=ch.find_last_not_of(" ");
-                std::string sch=ch.substr(0,end+1);
-                std::string s2ch=ch.substr(end+2);
-                size_t end2=s2ch.find_last_not_of(" ");
-                std::string s3ch=s2ch.substr(0,end2+1);
-                v1=stoi(sch);
-                v2=stoi(s2ch);
-                w=stoi(s3ch);
-                G.add_edges(v1,v2,w);
-            }
-            if(file.eof()){break;}
-            i++;
-        }
+        fscanf(file,"%d %d",&nbv,&nbe);
         for (int i=0;i<nbv;i++){
             if(i==s) {
                 G.add_nodes(i,1);
@@ -100,7 +75,13 @@ Graph build_graph(char* filename,int s){
                 G.add_nodes(i,0);
             }
         }
+        for(int i = 0; i < nbe; i++){
+            fscanf(file, "%d %d %d", &v1, &v2, &w);
+            G.add_edges(v1,v2,w);
+        }
+
     }
+    return G;
 }
 class Queue{
     public:
@@ -127,6 +108,14 @@ void printSolution(std::vector<int> Q)
     printf("Vertex \t\t Distance from the source\n");
     for (int i = 0; i < Q.size(); i++){
             printf("%d \t\t %d\n", i, Q[i]);
+    }
+}
+
+void printSolution(std::vector<std::pair<Node*,Edge> > path)
+{
+    printf("Vertex \t\t Distance from the source\n");
+    for (int i = 0; i < path.size(); i++){
+            printf("%d \t\t %d\n", path[i].first->index, path[i].second);
     }
 }
 
@@ -222,8 +211,6 @@ std::vector<Graph> GraphPartitioning(Graph G,int proc,int s){
                 break;
             }
             file >>ch;
-            //size_t end=ch.find_last_not_of("\n");
-            //std::string sch=ch.substr(0,end+1);
             int n=stoi(ch);
             G.Nodes[index]->GraphIndex=n;
             index++;
@@ -245,7 +232,7 @@ std::vector<Graph> GraphPartitioning(Graph G,int proc,int s){
         for (int k=0;k<G1->Nodes.size();k++){
             for (int w=0;w<G1->Nodes[k]->AdjNodes.size();w++){
                 if(G1->Nodes[k]->AdjNodes[w].first->GraphIndex!=G1->index){
-                    G1->AdjGraphs.push_back(G1->Nodes[k]->AdjNodes[w].first->GraphIndex);
+                    G1->AdjGraphs.insert(G1->Nodes[k]->AdjNodes[w].first->GraphIndex);
                 }
             }
         }
@@ -254,12 +241,12 @@ std::vector<Graph> GraphPartitioning(Graph G,int proc,int s){
     return graphs;
 }
 
-void addMessage(std::vector<int> Messagearray,Node* node){
-    std::mutex lk;
-    lk.lock();
-    lk.unlock();
+void addMessage(std::vector<std::vector<Node*> > Messagearray,Node* node,int GraphIndex){
+    std::lock_guard<std::mutex> lock(lk);
+    Messagearray[GraphIndex].push_back(node);
+    return;
 }
-std::vector<std::pair<Node*,int> > ParDijk(Graph G){
+void ParDijk(Graph G,std::vector<std::vector<Node*> > Messagearray,std::vector<int> sendTag,std::vector<std::pair<Node*,int> >& result){
     Queue Q;
     Q.TwoQueueInit(G);
     std::vector<std::pair<Node*,int> > path;
@@ -274,44 +261,49 @@ std::vector<std::pair<Node*,int> > ParDijk(Graph G){
                         G.Nodes[i]->AdjNodes[j].first->status=1;
                     }
                 }
-                int sendTag=0;//maybe should be atomic or smth..? idk or lock and unlock while adding
+                sendTag[G.index]=0;//maybe should be atomic or smth..? idk or lock and unlock while adding
                 std::vector<Node*> sucNodes;
                 for (int k=0; k<G.Nodes[i]->AdjNodes.size();k++){
                     if(G.Nodes[i]->AdjNodes[k].first->GraphIndex!=G.Nodes[i]->GraphIndex){
                         sucNodes.push_back(G.Nodes[i]->AdjNodes[k].first);
                     }
                 }
-                for(int g=0;g<G.AdjGraphs.size();g++){
-                    for (int r=0;r<sucNodes.size();r++){
-                        if (sucNodes[r]->dist>G.Nodes[i]->dist+sucNodes[r]->dist){
-                            //add info to messagearray
-                            sendTag=1;
+                std::vector<int> AdjGraphs1(G.AdjGraphs.begin(),G.AdjGraphs.end()); 
+                for (int r=0;r<sucNodes.size();r++){
+                    for(int g=0;g<AdjGraphs1.size();g++){
+                        if (sucNodes[r]->dist > G.Nodes[i]->dist+sucNodes[r]->dist && sucNodes[r]->GraphIndex==AdjGraphs1[g]){
+                            addMessage(Messagearray,sucNodes[r],g);
+                            sendTag[G.index]=1;
                         }
                     }
                 }
             }
-            int ExitFlag;
-            if(!ExitFlag){
-                int m;//nb of received nodes from current proc n
-                for (int i=0;i<G.AdjGraphs.size();i++){
-                    //send and receive message array
+        }
+        int ExitFlag=std::accumulate(sendTag.begin(),sendTag.end(),0);
+        if(ExitFlag){
+            std::vector<std::vector<Node*> > Messagearray1=Messagearray;
+            std::cout<<Messagearray1[0].size()<<std::endl;
+            for (int j=0;j<Messagearray1[G.index].size();j++){
+                for (int k=0;k<Messagearray1[G.index][j]->ParNodes.size();k++){
+                    if(Messagearray1[G.index][j]->ParNodes[k].first->GraphIndex==G.index){
+                        if(Messagearray1[G.index][j]->dist>Messagearray1[G.index][j]->ParNodes[k].first->dist+Messagearray1[G.index][j]->ParNodes[k].second){
+                            Messagearray1[G.index][j]->dist=Messagearray1[G.index][j]->ParNodes[k].first->dist+Messagearray1[G.index][j]->ParNodes[k].second;
+                            Q.TwoQueueInsert(Messagearray1[G.index][j]->ParNodes[k].first);
+                        }
+                    }
                 }
-                for (int j=0;j<m;j++){
-
-                }
-            }
-            else{
-                break;
             }
         }
+        else{
+            break;
+        }
     }
-        for (int i=0; i<G.Nodes.size();i++){
-            G.Nodes[i]->status=2;
-            std::pair<Node*,Edge> p1(G.Nodes[i],G.Nodes[i]->dist);
-            path.push_back(p1);
-
+    for (int i=0; i<G.Nodes.size();i++){
+        G.Nodes[i]->status=2;
+        std::pair<Node*,Edge> p1(G.Nodes[i],G.Nodes[i]->dist);
+        result.push_back(p1);
     }
-    return path;
+    return;
 }
 
 std::vector<std::pair<Node*,int> > ParallelSSSP(Graph G, int proc){
@@ -320,12 +312,14 @@ std::vector<std::pair<Node*,int> > ParallelSSSP(Graph G, int proc){
     std::vector<std::thread> thread(proc);
     std::vector<std::vector<std::pair<Node*, int> > > results(proc);
     std::vector<std::pair<Node*, int> > paths;
+    std::vector<std::vector<Node*> > MessageArray(proc);
+    std::vector<int> sendTag(proc);
     for (int i=0;i<proc;i++){
-        //thread[i]=std::thread(ParDijk,graphs[i],std::ref(results[i]));
+        thread[i]=std::thread(&ParDijk,graphs[i],MessageArray,sendTag,std::ref(results[i]));
     }
     std::for_each(thread.begin(),thread.end(),std::mem_fn(&std::thread::join));
     for (int j=0; j<proc;j++){
-        for (int k=0;j<results[j].size();k++){
+        for (int k=0;k<results[j].size();k++){
             paths.push_back(results[j][k]);
         }
     }
@@ -352,6 +346,24 @@ int main()
                          0, 0, 2, 0, 0, 0, 6, 7, 0 } ;
     Graph G=build_graph(graph,0,9,0);
     std::vector<int> Q=TwoQueue(G);
-    printSolution(Q);
+    //printSolution(Q);
+    std::string filename="test.txt";
+    const char* file=filename.c_str();
+    Graph G1=build_graph(file,0);
+    const std::chrono::time_point<std::chrono::steady_clock> start = std::chrono::steady_clock::now();
+    std::vector<int> Q1=TwoQueue(G1);
+    const std::chrono::time_point<std::chrono::steady_clock> end = std::chrono::steady_clock::now();
+    double time2=std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+    std::cout << time2 <<" micros."<< std::endl;
+    printSolution(Q1);
+    //const std::chrono::time_point<std::chrono::steady_clock> start1 = std::chrono::steady_clock::now();
+    //std::vector<Graph> graphs=GraphPartitioning(G1,3,0);
+    const std::chrono::time_point<std::chrono::steady_clock> start1 = std::chrono::steady_clock::now();
+    std::vector<Graph> graphs=GraphPartitioning(G1,3,0);
+    std::vector<std::pair<Node*,int> > path=ParallelSSSP(G1,4);
+    const std::chrono::time_point<std::chrono::steady_clock> end1 = std::chrono::steady_clock::now();
+    double time4=std::chrono::duration_cast<std::chrono::microseconds>(end1-start1).count();
+    std::cout << time4 <<" micros."<< std::endl;
+    printSolution(path);
     return 0;
 }

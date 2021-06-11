@@ -46,15 +46,15 @@ class Node {
         }
         int index;//index of the node
         int dist;//minimal distance between the source node and the node, can change
-        std::vector<Node*> ParNodes; //one of the IN nodes...?
+        std::vector<std::pair<Node*,Edge> > ParNodes; //one of the IN nodes...?
         int status;//0=unvisited, 1=tempo labeled 2=perma labeled
         int GraphIndex;
         std::vector<std::pair<Node*,Edge> > AdjNodes; //OUT nodes, not IN, vectors of pair (destination node, weight)
         void add_AdjNodes(std::pair<Node*,Edge> p1){
             this->AdjNodes.push_back(p1);
         };
-        void add_ParNodes(Node* node){
-            this->ParNodes.push_back(node);
+        void add_ParNodes(std::pair<Node*,Edge> p1){
+            this->ParNodes.push_back(p1);
         };
 };
 class Graph{
@@ -66,8 +66,9 @@ class Graph{
                     for (int s=0; s<this->Nodes.size();s++){
                         if(j==this->Nodes[s]->index){
                             std::pair<Node*,Edge> p1(this->Nodes[s],w);
+                            std::pair<Node*,Edge> p2(this->Nodes[k],w);
                             this->Nodes[k]->add_AdjNodes(p1);
-                            this->Nodes[s]->add_ParNodes(this->Nodes[k]);
+                            this->Nodes[s]->add_ParNodes(p2);
                         }
                     }
                 }
@@ -95,7 +96,7 @@ class Graph{
             }
         }
         std::vector<Node*> Nodes;
-        std::vector<int> AdjGraphs;
+        std::set<int> AdjGraphs;
         int index;
         Node* s;//source node
     };
