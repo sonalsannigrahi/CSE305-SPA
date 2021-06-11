@@ -26,6 +26,8 @@
 #include <string>
 // Number of vertices in the graph
 #define V 9
+
+//input: array of n*n weights, the index of the node to start and to end (was planning to use this for big graphs, but not useful anymore), source index s
 Graph build_graph(int graph[],int nbNodes_start,int nbNodes_end,int s){
     Graph G;
     std::vector<Node*> Nodes;
@@ -53,6 +55,53 @@ Graph build_graph(int graph[],int nbNodes_start,int nbNodes_end,int s){
     return G;
 }
 
+//input: filename of the txt created by the parser, index of the source node s
+Graph build_graph(char* filename,int s){
+    Graph G;
+    std::fstream file;
+    file.open(filename,std::ios::in);
+    int i=0;
+    int nbv,nbe,v1,v2,w;
+    if(!file){
+        std::cout<<"no file"<<std::endl;
+    }
+    else{
+        while(true){
+            if (i==0){
+                std::string ch;
+                file>>ch;
+                size_t end=ch.find_last_not_of(" ");
+                std::string sch=ch.substr(0,end+1);
+                std::string s2ch=ch.substr(end+2);
+                nbv=stoi(sch);
+                nbe=stoi(s2ch);
+            }
+            else{
+                std::string ch;
+                file>>ch;
+                size_t end=ch.find_last_not_of(" ");
+                std::string sch=ch.substr(0,end+1);
+                std::string s2ch=ch.substr(end+2);
+                size_t end2=s2ch.find_last_not_of(" ");
+                std::string s3ch=s2ch.substr(0,end2+1);
+                v1=stoi(sch);
+                v2=stoi(s2ch);
+                w=stoi(s3ch);
+                G.add_edges(v1,v2,w);
+            }
+            if(file.eof()){break;}
+            i++;
+        }
+        for (int i=0;i<nbv;i++){
+            if(i==s) {
+                G.add_nodes(i,1);
+            }
+            else{
+                G.add_nodes(i,0);
+            }
+        }
+    }
+}
 class Queue{
     public:
         Queue(){}
@@ -118,6 +167,8 @@ void Queue::TwoQueueRemove(Node* j){
         }
     }
 }
+
+//Sequential Dijkstra using two queues
 std::vector<int> TwoQueue(Graph G){
     Queue Q;
     std::vector<int> path;
@@ -142,11 +193,17 @@ std::vector<int> TwoQueue(Graph G){
 }
 
 /*graph partiioning:
-Input: graph, nb of processors using
+Input: graph, nb of processors using, index of the source node s
 Output: an array of partitioned graphs
 for each node, set the graph nb when partitioning
 also, for each graph, set the adjacent graph vector
 
+how we do: 
+first, construct the graph that represents the whole dataset
+second, get the index of the partitioned graph from graph_partitioning.ipynb
+third, read the file written by python, and partition the graph
+last, run pardijk for each partitioned graph in a parallel manner, by running ParallelSSSP
+end tadaa
 */
 
 std::vector<Graph> GraphPartitioning(Graph G,int proc,int s){
