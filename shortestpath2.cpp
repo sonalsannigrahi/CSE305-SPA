@@ -1,11 +1,5 @@
-//
-//  shortestpath.cpp
-//  
-//
-//  Created by Sonal Sannigrahi on 01/05/2021.
-//
-
 #include "shortestpath.hpp"
+#include "metis.h"
 //First implementing Djikstra in parallel
 
 //sequential djikstra for comparison
@@ -26,6 +20,7 @@
 // Number of vertices in the graph
 #define V 9
 std::mutex lk;
+
 //input: array of n*n weights, the index of the node to start and to end (was planning to use this for big graphs, but not useful anymore), source index s
 Graph build_graph(int graph[],int nbNodes_start,int nbNodes_end,int s){
     Graph G;
@@ -77,11 +72,36 @@ Graph build_graph(const char* filename,int s){
         }
         for(int i = 0; i < nbe; i++){
             fscanf(file, "%d %d %d", &v1, &v2, &w);
-            G.add_edges(v1,v2,w);
+            G.add_edges(v1-1,v2-1,w);
         }
 
     }
     return G;
+}
+
+std::vector<std::pair<Node*,int> > seqDijk(Graph G, int s){
+    std::queue<Node*> Q;
+    std::vector<std::pair<Node*,int> > path;
+    for (int i=0;i<G.Nodes.size();i++){
+        Q.push(G.Nodes[i]);
+    }
+    while (Q.size()){
+        for(int i=0;i<G.Nodes.size();i++){
+            Node* node=Q.front();
+            Q.pop();
+            for (int j=0;j<node->AdjNodes.size();j++){
+                if(node->AdjNodes[j].first->dist>node->dist+node->AdjNodes[j].second){
+                    node->AdjNodes[j].first->dist=node->dist+node->AdjNodes[j].second;
+                }
+            }
+        }
+    }
+    for (int i=0;i<G.Nodes.size();i++){
+        std::pair<Node*,int> p1(G.Nodes[i],G.Nodes[i]->dist);
+        path.push_back(p1);
+    }
+    std::cout<<path.size()<<std::endl;
+    return path;
 }
 class Queue{
     public:
@@ -116,6 +136,25 @@ void printSolution(std::vector<std::pair<Node*,Edge> > path)
     printf("Vertex \t\t Distance from the source\n");
     for (int i = 0; i < path.size(); i++){
             printf("%d \t\t %d\n", path[i].first->index, path[i].second);
+    }
+}
+void verifySeqandPar(std::vector<int> Q,std::vector<std::pair<Node*,int> > path){
+    bool b=1;
+    std::cout<<Q.size()<<" ,"<<path.size()<<std::endl;
+    if(Q.size()!=path.size()){
+        std::cout<<"size not correct"<<std::endl;
+        return;
+    }
+    for (int i=0;i<path.size();i++){
+        if(Q[path[i].first->index]!=path[i].second){
+            b=0;
+        }
+    }
+    if(b){
+        std::cout<<"results match"<<std::endl;
+    }
+    else{
+        std::cout<<"big F"<<std::endl;
     }
 }
 
@@ -172,6 +211,7 @@ std::vector<int> TwoQueue(Graph G){
                     G.Nodes[i]->AdjNodes[j].first->status=1;
                 }
             }
+            //G.Nodes[i]->status=1;
         }
     }
     for (int i=0; i<G.Nodes.size();i++){
@@ -194,12 +234,61 @@ third, read the file written by python, and partition the graph
 last, run pardijk for each partitioned graph in a parallel manner, by running ParallelSSSP
 end tadaa
 */
-
+std::vector<Graph> GraphPartitioning1(Graph G, int proc,int s){
+    //idx_t xadj[G.Nodes.size()];
+    //idx_t adjncy[G.nbe];
+    //idx_t weights[G.nbe];
+    std::vector<idx_t> weights;
+    std::vector<idx_t> xadj;
+    std::vector<idx_t> adjncy;
+    idx_t* edgecut;
+    idx_t* part;
+    std::vector<Graph> graphs;
+    int nbn=G.Nodes.size();
+    idx_t cons=1;
+    int count=0;
+    for (int i=0;i<G.Nodes.size();i++){
+        xadj.push_back(count);
+        count+=G.Nodes[i]->AdjNodes.size();
+        for (int k=0; k<G.Nodes[i]->AdjNodes.size();k++){
+            adjncy.push_back(G.Nodes[i]->AdjNodes[k].first->index);
+            weights.push_back(G.Nodes[i]->AdjNodes[k].second);
+        }
+    }
+    int a = METIS_PartGraphKway(&nbn,&cons,xadj.data(),adjncy.data(),NULL,NULL,weights.data(),&proc,NULL,NULL,NULL,edgecut,part);
+    std::cout<<part[0]<<std::endl;
+    for (int j=0;j<G.Nodes.size();j++){
+        G.Nodes[j]->GraphIndex=part[j];
+    }
+    for (int p=0;p<proc;p++){
+        Graph* G1 = new Graph;
+        for (int r=0;r<G.Nodes.size();r++){
+            if(G.Nodes[r]->GraphIndex==p){
+                if (G.Nodes[r]->index==s){
+                    G1->add_nodes(G.Nodes[r],1);
+                }
+                else{
+                    G1->add_nodes(G.Nodes[r],0);
+                }
+            }
+        }
+        G1->index=p;
+        for (int k=0;k<G1->Nodes.size();k++){
+            for (int w=0;w<G1->Nodes[k]->AdjNodes.size();w++){
+                if(G1->Nodes[k]->AdjNodes[w].first->GraphIndex!=G1->index){
+                    G1->AdjGraphs.insert(G1->Nodes[k]->AdjNodes[w].first->GraphIndex);
+                }
+            }
+        }
+        graphs.push_back(*G1);
+    }
+    return graphs;
+}
 std::vector<Graph> GraphPartitioning(Graph G,int proc,int s){
     std::vector<Graph> graphs;
     std::fstream file;
     int index=0;
-    file.open("data",std::ios::in);
+    file.open("data.txt",std::ios::in);
     if(!file){
         std::cout<<"no file"<<std::endl;
     }
@@ -261,6 +350,7 @@ void ParDijk(Graph G,std::vector<std::vector<Node*> > Messagearray,std::vector<i
                         G.Nodes[i]->AdjNodes[j].first->status=1;
                     }
                 }
+                //G.Nodes[i]->status=1;
                 sendTag[G.index]=0;//maybe should be atomic or smth..? idk or lock and unlock while adding
                 std::vector<Node*> sucNodes;
                 for (int k=0; k<G.Nodes[i]->AdjNodes.size();k++){
@@ -332,38 +422,33 @@ void printSolution(std::vector<std::pair<Node*,int> > paths)
             printf("%d \t\t %d\n", paths[i].first->index, paths[i].second);
     }
 }
-int main()
-{
-    /* Let us create the example graph discussed above */
-    int graph[V*V] = {  0, 4, 0, 0, 0, 0, 0, 8, 0 ,
-                         4, 0, 8, 0, 0, 0, 0, 11, 0 ,
-                         0, 8, 0, 7, 0, 4, 0, 0, 2 ,
-                         0, 0, 7, 0, 9, 14, 0, 0, 0 ,
-                         0, 0, 0, 9, 0, 10, 0, 0, 0 ,
-                         0, 0, 4, 14, 10, 0, 2, 0, 0 ,
-                         0, 0, 0, 0, 0, 2, 0, 1, 6 ,
-                         8, 11, 0, 0, 0, 0, 1, 0, 7 ,
-                         0, 0, 2, 0, 0, 0, 6, 7, 0 } ;
-    Graph G=build_graph(graph,0,9,0);
-    std::vector<int> Q=TwoQueue(G);
-    //printSolution(Q);
-    std::string filename="test.txt";
+int main() {
+    std::string filename="128v1024e.txt";
     const char* file=filename.c_str();
     Graph G1=build_graph(file,0);
+    const std::chrono::time_point<std::chrono::steady_clock> start2 = std::chrono::steady_clock::now();
+    std::vector<std::pair<Node*,int> > Pathver=seqDijk(G1,0);
+    const std::chrono::time_point<std::chrono::steady_clock> end2 = std::chrono::steady_clock::now();
+    double time3=std::chrono::duration_cast<std::chrono::microseconds>(end2-start2).count();
+    //printSolution(Pathver);
     const std::chrono::time_point<std::chrono::steady_clock> start = std::chrono::steady_clock::now();
     std::vector<int> Q1=TwoQueue(G1);
     const std::chrono::time_point<std::chrono::steady_clock> end = std::chrono::steady_clock::now();
     double time2=std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
     std::cout << time2 <<" micros."<< std::endl;
-    printSolution(Q1);
-    //const std::chrono::time_point<std::chrono::steady_clock> start1 = std::chrono::steady_clock::now();
-    //std::vector<Graph> graphs=GraphPartitioning(G1,3,0);
+    //printSolution(Q1);
+    std::vector<Graph> graphs=GraphPartitioning1(G1,3,0);
     const std::chrono::time_point<std::chrono::steady_clock> start1 = std::chrono::steady_clock::now();
-    std::vector<Graph> graphs=GraphPartitioning(G1,3,0);
-    std::vector<std::pair<Node*,int> > path=ParallelSSSP(G1,4);
+    std::vector<std::pair<Node*,int> > path=ParallelSSSP(G1,3);
     const std::chrono::time_point<std::chrono::steady_clock> end1 = std::chrono::steady_clock::now();
     double time4=std::chrono::duration_cast<std::chrono::microseconds>(end1-start1).count();
-    std::cout << time4 <<" micros."<< std::endl;
-    printSolution(path);
+
+    std::cout << "Sequential Dijkstra : " << time3 <<" micros."<< std::endl;
+    std::cout << "Two Queue Dijkstra : " << time2 <<" micros."<< std::endl;
+    std::cout << "Parallel Dijkstra : " << time4 <<" micros."<< std::endl;
+
+    //printSolution(path);
+    verifySeqandPar(Q1,path);
+    verifySeqandPar(Q1,Pathver);
     return 0;
 }

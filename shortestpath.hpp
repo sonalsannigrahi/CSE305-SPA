@@ -28,7 +28,7 @@ https://old.insight-centre.org/sites/default/files/publications/engineering_a_pa
 #include <algorithm>
 #include <iostream>
 
-#define INF 10000
+#define INF -1
 typedef unsigned int Edge;
 typedef std::vector<int> Path;
 
@@ -69,6 +69,7 @@ class Graph{
                             std::pair<Node*,Edge> p2(this->Nodes[k],w);
                             this->Nodes[k]->add_AdjNodes(p1);
                             this->Nodes[s]->add_ParNodes(p2);
+                            this->nbe+=1;
                         }
                     }
                 }
@@ -98,6 +99,7 @@ class Graph{
         std::vector<Node*> Nodes;
         std::set<int> AdjGraphs;
         int index;
+        int nbe;
         Node* s;//source node
     };
         
