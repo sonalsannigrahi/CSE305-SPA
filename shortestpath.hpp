@@ -22,7 +22,6 @@ https://old.insight-centre.org/sites/default/files/publications/engineering_a_pa
 #include <thread>
 #include <stack>
 #include <iostream>
-#include <sys/time.h>
 #include <set>
 #include <limits.h>
 #include <algorithm>
