@@ -201,7 +201,7 @@ void DeltaStep::deltastepping(int source){
 
 int DeltaStep::minDistance(int dist[], bool path[])
 {
-    int min = INT_MAX, min_index;
+    int min = MAX, min_index;
     for (int v = 0; v < this->vertex_num; v++)
         if (path[v] == false && dist[v] <= min)
             min = dist[v], min_index = v;
@@ -215,7 +215,7 @@ bool DeltaStep::validate(int source){
     bool path[this->vertex_num];
   
     for (int i = 0; i < this->vertex_num; i++)
-        dist[i] = INT_MAX, path[i] = false;
+        dist[i] = MAX, path[i] = false;
   
     dist[source] = 0;
   
@@ -223,7 +223,7 @@ bool DeltaStep::validate(int source){
         int u = DeltaStep::minDistance(dist, path);
         path[u] = true;
         for (int v = 0; v < this->vertex_num; v++)
-            if (!path[v] && dist[u] != INT_MAX
+            if (!path[v] && dist[u] != MAX
                 && adjacency_matrix[u][v] != INF
                 && dist[u] + adjacency_matrix[u][v] < dist[v])
                 dist[v] = dist[u] + adjacency_matrix[u][v];
@@ -329,12 +329,10 @@ bool DeltaStep::validate(int source){
      auto t2 = high_resolution_clock::now();
      duration<double, std::milli> ms_double = t2 - t1;
      std::cout<<"It took "<<ms_double.count()<<" milliseconds for execution"<<std::endl;
-      
-      //To print distances
      
      /*for(int i=0; i< main_algorithm.vertex_num; i++){
          std::cout<<i+1<< " and parent "<< main_algorithm.parent[i]<< " and shortest distance "<< main_algorithm.distance[i]<<std::endl;
-     } */
+     }*/
      
      //validating result
      
