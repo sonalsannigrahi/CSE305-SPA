@@ -9,4 +9,4 @@ make
 
 for example:
 
-./shortestpath 5 test.txt result_mine.txt 3 2
+make && ./shortestpath 5 test.txt result_mine.txt 3 2
