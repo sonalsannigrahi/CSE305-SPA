@@ -5,8 +5,8 @@ Compile with the following command for ∆-Stepping:
 
 make
 
-./shortestpath $number_threads $input.txt $result.txt $source_node
+./shortestpath $number_threads $input.txt $result.txt $source_node $delta
 
 for example:
 
-./shortestpath 5 test.txt result_mine.txt 3
+./shortestpath 5 test.txt result_mine.txt 3 2
