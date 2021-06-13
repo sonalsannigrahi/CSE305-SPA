@@ -69,6 +69,8 @@ class Graph{
                             std::pair<Node*,Edge> p2(this->Nodes[k],w);
                             this->Nodes[k]->add_AdjNodes(p1);
                             this->Nodes[s]->add_ParNodes(p2);
+                            this->Nodes[s]->add_AdjNodes(p2);//for undirected graphs
+                            this->Nodes[k]->add_ParNodes(p1);//for undirected graphs
                             this->nbe+=1;
                         }
                     }
