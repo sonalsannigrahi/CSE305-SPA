@@ -1,14 +1,20 @@
+//#pragma comment(metis.lib,"C:\Users\Utilisateur\Downloads\metis-5.1.0\libmetis\Release")
+//#pragma comment(metis.lib,"C:/Users/Utilisateur/Downloads/metis-5.1.0/libmetis/Release/metis.lib")
 #include "shortestpath.hpp"
-//First implementing Djikstra in parallel
 
+//First implementing Djikstra in parallel
+//#include "metis.h"
 //sequential djikstra for comparison
+
 #include <limits.h> 
 #include <stdio.h>
 #include <queue>
 #include <random>
+#include <errno.h>
 #include <algorithm>
 #include <vector>
 #include <thread>
+#include < numeric >
 #include <iostream>
 #include <fstream>
 #include <functional>
@@ -22,59 +28,57 @@ std::mutex lk;
 
 
 //input: filename of the txt created by the parser, index of the source node s
-Graph build_graph(const char* filename,int s){
+Graph build_graph(const char* filename, int s) {
     Graph G;
     FILE* file;
-    file=fopen(filename,"r");
-    int i=0;
-    int nbv,nbe,v1,v2,w;
+    errno_t fileerr = fopen_s(&file,filename, "r");
+    int i = 0;
+    int nbv, nbe, v1, v2, w;
     std::string ch;
-    if(!file){
-        std::cout<<"no file"<<std::endl;
+    if (!file) {
+        std::cout << "no file" << std::endl;
     }
-    else{
-        fscanf(file,"%d %d",&nbv,&nbe);
-        for (int i=0;i<nbv;i++){
-            if(i==s) {
-                G.add_nodes(i,1);
+    else {
+        fscanf_s(file, "%d %d", &nbv, &nbe);
+        for (int i = 0;i < nbv;i++) {
+            if (i == s) {
+                G.add_nodes(i, 1);
             }
-            else{
-                G.add_nodes(i,0);
+            else {
+                G.add_nodes(i, 0);
             }
         }
-        for(int i = 0; i < nbe; i++){
-            fscanf(file, "%d %d %d", &v1, &v2, &w);
-            G.add_edges(v1-1,v2-1,w);
+        for (int i = 0; i < nbe; i++) {
+            fscanf_s(file, "%d %d %d", &v1, &v2, &w);
+            G.add_edges(v1 - 1, v2 - 1, w);
         }
 
     }
-    std::cout<<G.Nodes.size()<<std::endl;
-    std::cout<<G.nbe<<std::endl;
     return G;
 }
 
-std::vector<std::pair<Node*,int> > seqDijk(Graph G, int s){
+std::vector<std::pair<Node*, int> > seqDijk(Graph G, int s) {
     std::queue<Node*> Q;
-    std::vector<std::pair<Node*,int> > path;
-    for (int i=0;i<G.Nodes.size();i++){
+    std::vector<std::pair<Node*, int> > path;
+    for (int i = 0;i < G.Nodes.size();i++) {
         Q.push(G.Nodes[i]);
     }
-    while (Q.size()){
-        for(int i=0;i<G.Nodes.size();i++){
-            Node* node=Q.front();
+    while (Q.size()) {
+        for (int i = 0;i < G.Nodes.size();i++) {
+            Node* node = Q.front();
             Q.pop();
-            for (int j=0;j<node->AdjNodes.size();j++){
-                if(node->AdjNodes[j].first->dist>node->dist+node->AdjNodes[j].second){
-                    node->AdjNodes[j].first->dist=node->dist+node->AdjNodes[j].second;
+            for (int j = 0;j < node->AdjNodes.size();j++) {
+                if (node->AdjNodes[j].first->dist > node->dist + node->AdjNodes[j].second) {
+                    node->AdjNodes[j].first->dist = node->dist + node->AdjNodes[j].second;
                 }
             }
         }
     }
-    for (int i=0;i<G.Nodes.size();i++){
-        std::pair<Node*,int> p1(G.Nodes[i],G.Nodes[i]->dist);
+    for (int i = 0;i < G.Nodes.size();i++) {
+        std::pair<Node*, int> p1(G.Nodes[i], G.Nodes[i]->dist);
         path.push_back(p1);
     }
-    std::cout<<path.size()<<std::endl;
+    std::cout << path.size() << std::endl;
     return path;
 }
 class Queue{
@@ -113,18 +117,19 @@ class Queue{
 void printSolution(std::vector<int> Q)
 {
     printf("Vertex \t\t Distance from the source\n");
-    for (int i = 0; i < Q.size(); i++){
-            printf("%d \t\t %d\n", i, Q[i]);
+    for (int i = 0; i < Q.size(); i++) {
+        printf("%d \t\t %d\n", i, Q[i]);
     }
 }
 
-void printSolution(std::vector<std::pair<Node*,Edge> > path)
+void printSolution(std::vector<std::pair<Node*, Edge> > path)
 {
     printf("Vertex \t\t Distance from the source\n");
-    for (int i = 0; i < path.size(); i++){
-            printf("%d \t\t %d\n", path[i].first->index, path[i].second);
+    for (int i = 0; i < path.size(); i++) {
+        printf("%d \t\t %d\n", path[i].first->index, path[i].second);
     }
 }
+
 void verifySeqandPar(std::vector<int> Q,std::vector<std::pair<Node*,int> > path){
     bool b=1;
     int count=0;
@@ -139,8 +144,8 @@ void verifySeqandPar(std::vector<int> Q,std::vector<std::pair<Node*,int> > path)
             count++;
         }
     }
-    if(b){
-        std::cout<<"results match"<<std::endl;
+    if (b) {
+        std::cout << "results match" << std::endl;
     }
     else{
         std::cout<<"results don't match"<<std::endl;
@@ -159,15 +164,16 @@ void Queue::TwoQueueInsert(Node* j){
             b=0;
         }
     }
-    if (b){
-        if(j->status==0){
+    if (b) {
+        if (j->status == 0) {
             this->Q1.push_back(j);
         }
-        else if (j->status==1){
+        else if (j->status == 1) {
             this->Q2.push_back(j);
         }
     }
 }
+
 
 void Queue::TwoQueueRemove(Node* j){
     if(j->index!=this->frontNode()->index){
@@ -185,7 +191,7 @@ void Queue::TwoQueueRemove(Node* j){
 }
 
 //Sequential Dijkstra using two queues
-std::vector<int> TwoQueue(Graph G){
+std::vector<int> TwoQueue(Graph G) {
     Queue Q;
     std::vector<int> path;
     Q.TwoQueueInit(G);
@@ -212,7 +218,7 @@ Output: an array of partitioned graphs
 for each node, set the graph nb when partitioning
 also, for each graph, set the adjacent graph vector
 
-how we do: 
+how we do:
 first, construct the graph that represents the whole dataset
 second, get the index of the partitioned graph from graph_partitioning.ipynb
 third, read the file written by python, and partition the graph
@@ -267,7 +273,8 @@ std::vector<Graph> GraphPartitioning(Graph G,int proc,int s){
     return graphs;
 }
 
-void addMessage(std::vector<std::vector<Node*> > Messagearray,Node* node,int GraphIndex){
+
+void addMessage(std::vector<std::vector<Node*> > Messagearray, Node* node, int GraphIndex) {
     std::lock_guard<std::mutex> lock(lk);
     Messagearray[GraphIndex].push_back(node);
     return;
@@ -333,42 +340,43 @@ void ParDijk(Graph G,std::vector<std::vector<Node*> > Messagearray,std::vector<i
                 }
             }
         }
-        else{
+        else {
             break;
         }
     }
-    for (int i=0; i<G.Nodes.size();i++){
-        G.Nodes[i]->status=2;
-        std::pair<Node*,Edge> p1(G.Nodes[i],G.Nodes[i]->dist);
+    for (int i = 0; i < G.Nodes.size();i++) {
+        G.Nodes[i]->status = 2;
+        std::pair<Node*, Edge> p1(G.Nodes[i], G.Nodes[i]->dist);
         result.push_back(p1);
     }
+    //std::cout << "result size : " << result.size() << std::endl;
     return;
 }
 
-std::vector<std::pair<Node*,int> > ParallelSSSP(Graph G, int proc){
+std::vector<std::pair<Node*, int> > ParallelSSSP(Graph G, int proc) {
     Queue Q;
-    std::vector<Graph> graphs=GraphPartitioning(G,proc,0);
+    std::vector<Graph> graphs = GraphPartitioning(G, proc, 0);
     std::vector<std::thread> thread(proc);
     std::vector<std::vector<std::pair<Node*, int> > > results(proc);
     std::vector<std::pair<Node*, int> > paths;
     std::vector<std::vector<Node*> > MessageArray(proc);
     std::vector<int> sendTag(proc);
-    for (int i=0;i<proc;i++){
-        thread[i]=std::thread(&ParDijk,graphs[i],MessageArray,sendTag,std::ref(results[i]));
+    for (int i = 0;i < proc;i++) {
+        thread[i] = std::thread(&ParDijk, graphs[i], MessageArray, sendTag, std::ref(results[i]));
     }
-    std::for_each(thread.begin(),thread.end(),std::mem_fn(&std::thread::join));
-    for (int j=0; j<proc;j++){
-        for (int k=0;k<results[j].size();k++){
+    std::for_each(thread.begin(), thread.end(), std::mem_fn(&std::thread::join));
+    for (int j = 0; j < proc;j++) {
+        for (int k = 0;k < results[j].size();k++) {
             paths.push_back(results[j][k]);
         }
     }
     return paths;
 }
-void printSolution(std::vector<std::pair<Node*,int> > paths)
+void printSolution(std::vector<std::pair<Node*, int> > paths)
 {
     printf("Vertex \t\t Distance from the source\n");
-    for (int i = 0; i < paths.size(); i++){
-            printf("%d \t\t %d\n", paths[i].first->index, paths[i].second);
+    for (int i = 0; i < paths.size(); i++) {
+        printf("%d \t\t %d\n", paths[i].first->index, paths[i].second);
     }
 }
 int main() {
@@ -377,15 +385,14 @@ int main() {
     const char* file=filename.c_str();
     Graph G1=build_graph(file,0);
     const std::chrono::time_point<std::chrono::steady_clock> start2 = std::chrono::steady_clock::now();
-    std::vector<std::pair<Node*,int> > Pathver=seqDijk(G1,0);
+    std::vector<std::pair<Node*, int> > Pathver = seqDijk(G1, 0);
     const std::chrono::time_point<std::chrono::steady_clock> end2 = std::chrono::steady_clock::now();
-    double time3=std::chrono::duration_cast<std::chrono::microseconds>(end2-start2).count();
+    double time3 = std::chrono::duration_cast<std::chrono::microseconds>(end2 - start2).count();
     //printSolution(Pathver);
     const std::chrono::time_point<std::chrono::steady_clock> start = std::chrono::steady_clock::now();
-    std::vector<int> Q1=TwoQueue(G1);
+    std::vector<int> Q1 = TwoQueue(G1);
     const std::chrono::time_point<std::chrono::steady_clock> end = std::chrono::steady_clock::now();
-    double time2=std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-    std::cout << time2 <<" micros."<< std::endl;
+    double time2 = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
     //printSolution(Q1);
    //std::vector<Graph> graphs=GraphPartitioning(G1,4,0);
     const std::chrono::time_point<std::chrono::steady_clock> start1 = std::chrono::steady_clock::now();
@@ -398,7 +405,7 @@ int main() {
     std::cout << "Parallel Dijkstra : " << time4 <<" micros."<< std::endl;
 
     //printSolution(path);
-    verifySeqandPar(Q1,path);
-    verifySeqandPar(Q1,Pathver);
+    verifySeqandPar(Q1, path);
+    verifySeqandPar(Q1, Pathver);
     return 0;
 }
